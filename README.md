@@ -1,2 +1,2 @@
 # i-hate-reading
-NotebookLM-inpired agent that runs locally
+NotebookLM-inspired agent that runs locally
