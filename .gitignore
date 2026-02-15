@@ -1,4 +1,6 @@
 .env
 __pycahe__/
-*.__pycahe__data/
+*.__pycahe__
+data/
 ./DS_Store
+venv/
