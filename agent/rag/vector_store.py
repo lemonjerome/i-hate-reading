@@ -6,7 +6,7 @@ client = QdrantClient(url="http://qdrant:6333")
 COLLECTION = "notebook_docs"
 
 def create_collection(vector_size):
-    collections = client.get_collectopns().collections
+    collections = client.get_collections().collections
     if COLLECTION not in [c.name for c in collections]:
         client.create_collection(
             collection_name = COLLECTION,
