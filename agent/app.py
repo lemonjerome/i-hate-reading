@@ -52,3 +52,11 @@ def ingest_endpoint(data: dict):
 @app.post("/retrieve")
 def retrieve_endpoint(query: str):
     return retrieve(query)
+
+@app.delete("/clear")
+def clear_collection():
+    try:
+        client.delete_collection(collection_name="notebook_docs")
+        return {"status": "collection deleted"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}

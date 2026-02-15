@@ -16,8 +16,6 @@ services:
     container_name: qdrant
     ports:
       - "6333:6333"
-    volumes:
-      - qdrant_data:/qdrant/storage
     restart: unless-stopped
 
   open-webui:
@@ -45,4 +43,3 @@ services:
 
 volumes:
   ollama_data:
-  qdrant_data:
