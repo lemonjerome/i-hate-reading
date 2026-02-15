@@ -1,3 +1,7 @@
 fastapi
 uvicorn
 requests
+qdrant-client
+llama-index
+llama-index-embeddings-huggingface
+sentence-transformers

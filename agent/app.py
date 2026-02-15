@@ -1,9 +1,12 @@
 from fastapi import FastAPI
 import requests
+from qdrant_client import QdrantClient
 
 app = FastAPI()
 
 OLLAMA_URL = "http://ollama:11434/api/generate"
+
+client = QdrantClient(url="http://qdrant:6333")
 
 @app.get("/")
 def root():
@@ -35,3 +38,7 @@ def test_stream():
     )
 
     return response.text
+
+@app.get("/test-qdrant")
+def test_qdrant():
+    return {"collections": client.get_collections()}
