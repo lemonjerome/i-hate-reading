@@ -31,7 +31,7 @@ services:
       - ollama
     restart: unless-stopped
 
-  notebook_agent:
+  notebook-agent:
     build: ./agent
     container_name: notebook-agent
     ports:
