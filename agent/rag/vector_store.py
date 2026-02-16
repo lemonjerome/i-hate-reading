@@ -1,6 +1,10 @@
 from qdrant_client import QdrantClient
 from qdrant_client.models import VectorParams, Distance, PointStruct
 
+import os
+import uuid
+
+QDRANT_URL = os.getenv("QDRANT_HOST", "http://qdrant:6333")
 client = QdrantClient(url="http://qdrant:6333")
 
 COLLECTION = "notebook_docs"
@@ -19,15 +23,18 @@ def create_collection(vector_size):
 def insert_chunks(chunks, embeddings, metadata):
     points = []
 
-    for i, (chunk, emb) in enumerate(zip(chunks, embeddings)):
+    for (chunk, emb) in zip(chunks, embeddings):
+        payload = {
+            "text": chunk["text"],
+            "chunk_index": chunk.get("chunk_index"),
+            **metadata,
+        }
+
         points.append(
             PointStruct(
-                id=i,
+                id=str(uuid.uuid4()),
                 vector=emb,
-                payload={
-                    "text": chunk,
-                    **metadata
-                }
+                payload=payload
             )
         )
     
