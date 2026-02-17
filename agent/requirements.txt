@@ -5,3 +5,5 @@ qdrant-client
 llama-index
 llama-index-embeddings-huggingface
 sentence-transformers
+python-multipart
+aiofiles
