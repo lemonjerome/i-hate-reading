@@ -21,13 +21,13 @@ def _dedupe_hits(hits: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 def _summarize_hits(question: str, hits: List[Dict[str, Any]]) -> str:
     by_source = defaultdict(list)
     for h in hits:
-        by_source[str(h.get("source", "unkown"))].append(h)
+        by_source[str(h.get("source", "unknown"))].append(h)
 
     blocks = []
     for source, hs in by_source.items():
         hs = sorted (hs, key=lambda x: (x.get("rerank_score", x.get("score", 0))or 0), reverse=True)[:6]
         excerpts = "\n".join(
-            f"- {source}#{h.get('chunk_index')}] {h.get('text', '')[:700]}"
+            f"- [{source}#{h.get('chunk_index')}] {h.get('text', '')[:700]}"
             for h in hs
         )
         blocks.append(f"SOURCE: {source}\n{excerpts}")
@@ -50,7 +50,7 @@ def _stitch_context(hits: List[Dict[str, Any]], max_chunks: int = 12) -> str:
         return (
             str(h.get("source", "")),
             str(h.get("doc_id", "")),
-            int(h.get("chunks_index") if h.get("chunk_index") is not None else 10**9)
+            int(h.get("chunk_index") if h.get("chunk_index") is not None else 10**9)
         )
     
     selected = hits[:max_chunks]
@@ -58,7 +58,7 @@ def _stitch_context(hits: List[Dict[str, Any]], max_chunks: int = 12) -> str:
 
     stitched = []
     for h in selected_sorted:
-        source = h.get("source", "unkown")
+        source = h.get("source", "unknown")
         idx = h.get("chunk_index", "?")
         stitched.append(f"[{source}#{idx}] {h.get('text', '')}")
     return "\n\n".join(stitched)
@@ -67,14 +67,16 @@ def answer_question_stream(question: str) -> Iterator[Dict[str, Any]]:
     enable_rerank = os.getenv("ENABLE_RERANK", "1") not in ("0", "false", "False")
     max_context_chunks = int(os.getenv("MAX_CONTEXT_CHUNKS", "12"))
 
+    # Initial Planning
     plan = plan_queries(question)
     queries = plan["queries"]
     top_k = plan["top_k"]
     rounds = plan["rounds"]
 
-    all_hits: List[Dict[str, Any]]
+    all_hits: List[Dict[str, Any]] = []
     intermediate_summary = ""
 
+    # Iterative Planning
     for r in range(max(1, rounds)):
         round_hits: List[Dict[str, Any]] = []
         for q in queries:
@@ -101,6 +103,7 @@ def answer_question_stream(question: str) -> Iterator[Dict[str, Any]]:
             if next_qs:
                 queries = next_qs
 
+    # Final Answer
     final_hits = all_hits
     if enable_rerank:
         final_hits = rerank(question, final_hits, top_n=max_context_chunks)
