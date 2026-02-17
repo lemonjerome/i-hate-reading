@@ -13,4 +13,4 @@ def chunk_document(text, source):
     )
 
     nodes = splitter.get_nodes_from_documents([doc])
-    return [{"text": node.txt, "chunk_index": i} for i, node in enumerate(nodes)]
+    return [{"text": node.text, "chunk_index": i} for i, node in enumerate(nodes)]

@@ -5,7 +5,8 @@ import os
 import uuid
 
 QDRANT_URL = os.getenv("QDRANT_HOST", "http://qdrant:6333")
-client = QdrantClient(url="http://qdrant:6333")
+
+client = QdrantClient(url=QDRANT_URL)
 
 COLLECTION = "notebook_docs"
 
