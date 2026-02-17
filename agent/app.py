@@ -1,14 +1,25 @@
+import os
 from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+import json
 import requests
 from qdrant_client import QdrantClient
+
 from rag.ingestion import ingest_document
 from rag.retrieval import retrieve
+from rag.pipeline import answer_question_stream
 
 app = FastAPI()
 
-OLLAMA_URL = "http://ollama:11434/api/generate"
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://ollama:11434")
+QDRANT_HOST = os.getenv("QDRANT_HOST", "http://qdrant:6333")
 
-client = QdrantClient(url="http://qdrant:6333")
+OLLAMA_URL = f"{OLLAMA_HOST}/api/generate"
+client = QdrantClient(url=QDRANT_HOST)
+
+class AskRequest(BaseModel):
+    question: str
 
 @app.get("/")
 def root():
@@ -60,3 +71,19 @@ def clear_collection():
         return {"status": "collection deleted"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+    
+@app.post("/ask")
+def ask(req: AskRequest):
+    def ndjson_iter():
+        for msg in answer_question_stream(req.question):
+            yield json.dumps(msg, ensure_ascii=False) + "\n"
+
+    return StreamingResponse(
+        ndjson_iter(),
+        media_type="application/x-ndjson",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no"
+        },
+    )
+
