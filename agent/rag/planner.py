@@ -6,10 +6,10 @@ def plan_queries(question: str) -> Dict[str, Any]:
     You are a retrieval planner for a local RAG system.
     Return ONLY valid JSON with this schema, no other text:
     {{
-        "queries": ["..."],
-        "top_k": 12,
-        "rounds": 2,
-        "notes": "short optional note" 
+        "queries": ["..."],          // 2-6 focused search queries derived from the question, List of strings
+        "top_k": 12,                 // suggested per-query retrieval depth (8-20), integer
+        "rounds": 2,                 // 1-3, integer
+        "notes": "short optional note" // string
     }}
 
     Here is the User Question:
@@ -33,7 +33,7 @@ def followup_queries(question: str, intermedieate_summary: str) -> List[str]:
         Given the user question and what we have so far, propose up to 3 follow-up queriesto fill missing gaps.
         Return ONLY JSON, no other text:
 
-        {{"queries: ["...", "..."]}}
+        {{"queries: ["...", "..."]}} // List of strings
 
         Here is the User Question:
         {question}
