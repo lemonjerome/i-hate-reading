@@ -6,14 +6,13 @@ def plan_queries(question: str) -> Dict[str, Any]:
     You are a retrieval planner for a local RAG system.
     Return ONLY valid JSON with this schema, no other text:
     {{
-        "queries": ["..."],          // 2-4 focused search queries derived from the question, List of strings
-        "top_k": 10,                 // suggested per-query retrieval depth (8-15), integer
-        "rounds": 1,                 // 1-2, integer
-        "notes": "short optional note" // string
+        "queries": ["..."],
+        "top_k": 10,
+        "rounds": 1,
+        "notes": "short optional note"
     }}
 
-    Here is the User Question:
-    {question}
+    User Question: {question}
     """.strip()
 
     plan = generate_json(prompt)
@@ -24,22 +23,18 @@ def plan_queries(question: str) -> Dict[str, Any]:
         "queries": [q for q in queries if isinstance(q, str) and q.strip()][:4],
         "top_k": min(int(plan.get("top_k", 10)), 15),
         "rounds": min(int(plan.get("rounds", 1)), 2),
-        "notes": str(plan.get("notes", ""))
+        "notes": str(plan.get("notes", "")),
     }
 
-def followup_queries(question: str, intermedieate_summary: str) -> List[str]:
+
+def followup_queries(question: str, intermediate_summary: str) -> List[str]:
     prompt = f"""
-        You are imporving retrieval with iterative search.
-        Given the user question and what we have so far, propose up to 3 follow-up queriesto fill missing gaps.
-        Return ONLY JSON, no other text:
+    Propose up to 3 follow-up search queries to fill gaps.
+    Return ONLY JSON: {{"queries": ["...", "..."]}}
 
-        {{"queries: ["...", "..."]}} // List of strings
+    Question: {question}
 
-        Here is the User Question:
-        {question}
-
-        What we have so far (summary):
-        {intermedieate_summary}
+    Summary so far: {intermediate_summary}
     """.strip()
 
     obj = generate_json(prompt)
