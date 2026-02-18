@@ -25,21 +25,20 @@ def _summarize_hits(question: str, hits: List[Dict[str, Any]]) -> str:
 
     blocks = []
     for source, hs in by_source.items():
-        hs = sorted (hs, key=lambda x: (x.get("rerank_score", x.get("score", 0))or 0), reverse=True)[:6]
+        hs = sorted (hs, key=lambda x: (x.get("rerank_score", x.get("score", 0))or 0), reverse=True)[:4]
         excerpts = "\n".join(
-            f"- [{source}#{h.get('chunk_index')}] {h.get('text', '')[:700]}"
+            f"- [{source}#{h.get('chunk_index')}] {h.get('text', '')[:400]}"
             for h in hs
         )
         blocks.append(f"SOURCE: {source}\n{excerpts}")
 
     prompt = f"""
-    Summarize the retrieved information to supportanswering the user's question.
-    Write a compact bullet summary and explicitly mention uncertainties/gaps.
+    Summarize the retrieved information to support answering the user's question.
+    Write a compact bullet summary (max 200 words). Mention gaps.
 
-    Here is the User Question:
-    {question}
+    Question: {question}
 
-    Retrieved Excerpts:
+    Excerpts:
     {chr(10).join(blocks)}
     """.strip()
 
@@ -49,7 +48,7 @@ def _summarize_chat_history(chat_history: List[dict]) -> str:
     if not chat_history:
         return ""
     
-    recent_history = chat_history[-8:]
+    recent_history = chat_history[-6:]
 
     history_text = "Recent conversation:\n"
 
@@ -59,28 +58,12 @@ def _summarize_chat_history(chat_history: List[dict]) -> str:
         history_text += f"{role}: {content}\n"
 
     summary_prompt = f"""
-    Summarize this conversation history into bullets focusing on:
-    - Key topics discussed
-    - Relevant terms mentioned and defined
-    - Important conclusions or facts mentioned
-    - Context relevant to continuing the conversation
-
-    The roles should still be mentioned for example:
-
-    '''
-    user: <question 1>
-    assistant: <response in bullets>
-
-    user: <question 2>
-    assistant: <response in bullets>
-    '''
-
-    Keep the bullets brief and factual.
+    Summarize this conversation in 2-3 sentences. Focus on key topics and conclusions.
 
     {history_text}
     """.strip()
 
-    summary = generate_text(summary_prompt, temperature=0.1)
+    summary = generate_text(summary_prompt, temperature=0.1, num_ctx=2048)
     return summary.strip()
 
 def _stitch_context(hits: List[Dict[str, Any]], max_chunks: int = 12) -> str:
@@ -103,7 +86,7 @@ def _stitch_context(hits: List[Dict[str, Any]], max_chunks: int = 12) -> str:
 
 def answer_question_stream(question: str, chat_history: List[dict], selected_sources: List[dict]) -> Iterator[Dict[str, Any]]:
     enable_rerank = os.getenv("ENABLE_RERANK", "1") not in ("0", "false", "False")
-    max_context_chunks = int(os.getenv("MAX_CONTEXT_CHUNKS", "12"))
+    max_context_chunks = int(os.getenv("MAX_CONTEXT_CHUNKS", "8"))
 
     chat_history = chat_history or []
     selected_sources = selected_sources or []
@@ -191,7 +174,7 @@ def answer_question_stream(question: str, chat_history: List[dict], selected_sou
     {stitched_context}
     """.strip()
 
-    for token in generate_text_stream(final_prompt, temperature=0.2):
+    for token in generate_text_stream(final_prompt, temperature=0.2, num_ctx=8192):
         yield {"type": "token", "content": token}
 
     yield {"type": "done"}

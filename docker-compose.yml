@@ -1,20 +1,10 @@
 version: "3.9"
 
 services:
-  ollama:
-    image: ollama/ollama
-    container_name: ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "ollama list || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
+  # NOTE: Run Ollama NATIVELY on macOS for Metal GPU acceleration.
+  # Start it before docker-compose: `ollama serve`
+  # Docker cannot access Apple Silicon GPU — running Ollama in Docker
+  # forces CPU-only mode (0/37 layers offloaded to GPU).
 
   qdrant:
     image: qdrant/qdrant
@@ -40,15 +30,15 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_HOST=http://host.docker.internal:11434
       - OLLAMA_MODEL=qwen3:8b
       - QDRANT_HOST=http://qdrant:6333
       - RERANK_MODEL=BAAI/bge-reranker-base
       - ENABLE_RERANK=1
-      - MAX_CONTEXT_CHUNKS=12
+      - MAX_CONTEXT_CHUNKS=8
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
-      ollama:
-        condition: service_healthy
       qdrant:
         condition: service_healthy
     restart: unless-stopped
@@ -58,5 +48,4 @@ networks:
     driver: bridge
 
 volumes:
-  ollama_data:
   qdrant_data:

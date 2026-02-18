@@ -6,14 +6,17 @@ from typing import Any, Optional
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://ollama:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:8b")
 
-def generate_text_stream(prompt: str, model: Optional[str] = None, temperature: float = 0.2):
+def generate_text_stream(prompt: str, model: Optional[str] = None, temperature: float = 0.2, num_ctx: int = 8192):
     url = f"{OLLAMA_HOST}/api/generate"
 
     payload = {
         "model": model or OLLAMA_MODEL,
         "prompt": prompt,
         "stream": True,
-        "temperature": temperature
+        "temperature": temperature,
+        "options": {
+            "num_ctx": num_ctx,
+        }
     }
 
     with requests.post(url, json=payload, stream=True, timeout=180) as r:
@@ -28,8 +31,8 @@ def generate_text_stream(prompt: str, model: Optional[str] = None, temperature: 
             if obj.get("done"):
                 break
 
-def generate_text( prompt: str, model: Optional[str] = None, temperature: float = 0.2,) -> str:
-    return "".join(generate_text_stream(prompt, model=model, temperature=temperature))
+def generate_text(prompt: str, model: Optional[str] = None, temperature: float = 0.2, num_ctx: int = 4096) -> str:
+    return "".join(generate_text_stream(prompt, model=model, temperature=temperature, num_ctx=num_ctx))
 
 
 def generate_json(prompt: str, model: Optional[str] = None, temperature: float = 0.0) -> Any:
@@ -40,6 +43,9 @@ def generate_json(prompt: str, model: Optional[str] = None, temperature: float =
         "prompt": prompt,
         "stream": False,
         "format": "json",
+        "options": {
+            "num_ctx": 4096,
+        }
     }
 
     r = requests.post(url, json=payload, timeout=180)
