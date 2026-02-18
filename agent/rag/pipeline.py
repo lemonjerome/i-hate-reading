@@ -45,6 +45,44 @@ def _summarize_hits(question: str, hits: List[Dict[str, Any]]) -> str:
 
     return generate_text(prompt, temperature=0.2)
 
+def _summarize_chat_history(chat_history: List[dict]) -> str:
+    if not chat_history:
+        return ""
+    
+    recent_history = chat_history[-8:]
+
+    history_text = "Recent conversation:\n"
+
+    for msg in recent_history:
+        role = msg.get("role", "user")
+        content = msg.get("content", "")
+        history_text += f"{role}: {content}\n"
+
+    summary_prompt = f"""
+    Summarize this conversation history into bullets focusing on:
+    - Key topics discussed
+    - Relevant terms mentioned and defined
+    - Important conclusions or facts mentioned
+    - Context relevant to continuing the conversation
+
+    The roles should still be mentioned for example:
+
+    '''
+    user: <question 1>
+    assistant: <response in bullets>
+
+    user: <question 2>
+    assistant: <response in bullets>
+    '''
+
+    Keep the bullets brief and factual.
+
+    {history_text}
+    """.strip()
+
+    summary = generate_text(summary_prompt, temperature=0.1)
+    return summary.strip()
+
 def _stitch_context(hits: List[Dict[str, Any]], max_chunks: int = 12) -> str:
     def key(h: Dict[str, Any]):
         return (
@@ -63,10 +101,19 @@ def _stitch_context(hits: List[Dict[str, Any]], max_chunks: int = 12) -> str:
         stitched.append(f"[{source}#{idx}] {h.get('text', '')}")
     return "\n\n".join(stitched)
 
-def answer_question_stream(question: str) -> Iterator[Dict[str, Any]]:
+def answer_question_stream(question: str, chat_history: List[dict], selected_sources: List[dict]) -> Iterator[Dict[str, Any]]:
     enable_rerank = os.getenv("ENABLE_RERANK", "1") not in ("0", "false", "False")
     max_context_chunks = int(os.getenv("MAX_CONTEXT_CHUNKS", "12"))
 
+    chat_history = chat_history or []
+    selected_sources = selected_sources or []
+
+    # Chat Context
+    chat_summary = ""
+    if chat_history:
+        chat_summary = _summarize_chat_history(chat_history)
+
+    
     # Initial Planning
     plan = plan_queries(question)
     queries = plan["queries"]
@@ -80,7 +127,7 @@ def answer_question_stream(question: str) -> Iterator[Dict[str, Any]]:
     for r in range(max(1, rounds)):
         round_hits: List[Dict[str, Any]] = []
         for q in queries:
-            res = retrieve(q, top_k=top_k)
+            res = retrieve(q, top_k=top_k, filter_sources=selected_sources)
             if isinstance(res, dict) and res.get("error"):
                 yield {"type": "error", "error": res["error"], "plan": plan}
                 return
@@ -122,9 +169,19 @@ def answer_question_stream(question: str) -> Iterator[Dict[str, Any]]:
     }
 
     final_prompt = f"""
-    Answer the user using ONLY the context below. If the context is insufficient, say what is missing. Include citations like [source#chunk_index] for key claims.and
+    Answer the user using ONLY the context below. Format your response in clean Markdown:
+    - Use **bold** for emphasis
+    - Use ## for section headers if needed
+    - Use bullet points with - or numbered lists
+    - Use `code` for technical terms
+    - Include citations like [source#chunk_index] for key claims
+    
+    If the context is insufficient, clearly state what information is missing.
 
-    Question:
+    Chat Context:
+    {chat_summary}
+
+    Current Question:
     {question}
 
     Intermediate summary (may be incomplete):
