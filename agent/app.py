@@ -1,10 +1,13 @@
 import os
-from fastapi import FastAPI
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
 import json
-import requests
+
+from pydantic import BaseModel
 from qdrant_client import QdrantClient
+from typing import List
+
+from fastapi import FastAPI, UploadFile, File
+from fastapi.responses import StreamingResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from rag.ingestion import ingest_document
 from rag.retrieval import retrieve
@@ -18,64 +21,90 @@ QDRANT_HOST = os.getenv("QDRANT_HOST", "http://qdrant:6333")
 OLLAMA_URL = f"{OLLAMA_HOST}/api/generate"
 client = QdrantClient(url=QDRANT_HOST)
 
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 class AskRequest(BaseModel):
     question: str
+    chat_history: List[dict] = []
+    selected_source: List[str] = []
 
-@app.get("/")
-def root():
-    return {"status": "notebook-agent running"}
 
-@app.get("/test-llm")
-def test_llm():
-    response = requests.post(
-        OLLAMA_URL,
-        json = {
-            "model": "qwen3:8b",
-            "prompt": "Say hello from Qwen",
-            "stream": False
-        }
-    )
+@app.get("/", response_class=HTMLResponse)
+async def root():
+    with open("static/index.html", "r") as f:
+        return f.read()
 
-    return response.json()
+@app.post("/upload")
+async def upload_document(files: List[UploadFile] = File(...)):
+    results = []
 
-@app.get("/test-stream")
-def test_stream():
-    response = requests.post(
-        OLLAMA_URL,
-        json = {
-            "model": "qwen3:8b",
-            "prompt": "Say hello from Qwen",
-            "stream": True
-        },
-        stream=True
-    )
+    for file in files:
+        try:
+            content = await file.read()
+            text_content = content.decode('utf-8')
 
-    return response.text
+            result = ingest_document(text_content, file.filename)
+            results.append({
+                "filename": file.filename,
+                "status": "success",
+                "result": result
+            })
+        except Exception as e:
+            results.append({
+                results.append({
+                "filename": file.filename,
+                "status": "error",
+                "message": str(e)
+            })
+            })
+    
+    return {"resuts": results}
 
-@app.get("/test-qdrant")
-def test_qdrant():
-    return {"collections": client.get_collections()}
+@app.get("/documents")
+def list_documents():
+    try:
+        scroll_result = client.scroll(
+            collection_name="notebook_docs",
+            limit=10000,
+            with_payload=True,
+            with_vectors=False
+        )
 
-@app.post("/ingest")
-def ingest_endpoint(data: dict):
-    return ingest_document(data["text"], data["source"])
+        sources = set()
 
-@app.post("/retrieve")
-def retrieve_endpoint(query: str):
-    return retrieve(query)
+        for point in scroll_result[0]:
+            if point.payload and "source" in point.payload:
+                sources.add(point.payload["source"])
 
-@app.delete("/clear")
-def clear_collection():
+        return {"documents": sorted(list(sources))}
+    
+    except Exception as e:
+        return {"documents": []}
+    
+@app.delete("/clear-chat")
+def clear_chat():
+    return {"status": "chat cleared"}
+
+@app.delete("/clear-all")
+def clear_all():
     try:
         client.delete_collection(collection_name="notebook_docs")
-        return {"status": "collection deleted"}
+        client.create_collection(
+            collection_name="notebook_docs",
+            vectors_config={"size": 768, "distance": "Cosine"}
+        )
+        return {"status": "all data cleared"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
     
-@app.post("/ask")
+@app.post("/app")
 def ask(req: AskRequest):
     def ndjson_iter():
-        for msg in answer_question_stream(req.question):
+        for msg in answer_question_stream(
+            req.question,
+            chat_history=req.chat_history,
+            selected_sources=req.selected_sources
+        ):
             yield json.dumps(msg, ensure_ascii=False) + "\n"
 
     return StreamingResponse(
@@ -84,6 +113,6 @@ def ask(req: AskRequest):
         headers={
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no"
-        },
+        }
     )
 
