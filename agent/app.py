@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from qdrant_client import QdrantClient
 from typing import List
 
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import StreamingResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -26,7 +26,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 class AskRequest(BaseModel):
     question: str
     chat_history: List[dict] = []
-    selected_source: List[str] = []
+    selected_sources: List[str] = []
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -40,6 +40,15 @@ async def upload_document(files: List[UploadFile] = File(...)):
 
     for file in files:
         try:
+            # Validate file type
+            if not file.filename.lower().endswith('.pdf'):
+                results.append({
+                    "filename": file.filename,
+                    "status": "error",
+                    "message": "Only PDF files are allowed"
+                })
+                continue
+
             content = await file.read()
             text_content = content.decode('utf-8')
 
@@ -51,14 +60,12 @@ async def upload_document(files: List[UploadFile] = File(...)):
             })
         except Exception as e:
             results.append({
-                results.append({
                 "filename": file.filename,
                 "status": "error",
                 "message": str(e)
             })
-            })
     
-    return {"resuts": results}
+    return {"results": results}
 
 @app.get("/documents")
 def list_documents():
@@ -97,7 +104,7 @@ def clear_all():
     except Exception as e:
         return {"status": "error", "message": str(e)}
     
-@app.post("/app")
+@app.post("/ask")
 def ask(req: AskRequest):
     def ndjson_iter():
         for msg in answer_question_stream(

@@ -19,6 +19,21 @@ const documentList = document.getElementById('documentList');
 const clearChatBtn = document.getElementById('clearChatBtn');
 const newChatBtn = document.getElementById('newChatBtn');
 
+// Cleanup on window close/unload
+window.addEventListener('beforeunload', async (e) => {
+    e.preventDefault();
+    e.returnValue = 'Are you sure you want to leave? All chat history and documents will be deleted.';
+    
+    // Clear all data
+    try {
+        await fetch('/clear-all', { method: 'DELETE', keepalive: true });
+    } catch (error) {
+        console.error('Error clearing data on exit:', error);
+    }
+    
+    return e.returnValue;
+});
+
 // Show upload modal on load
 window.addEventListener('load', () => {
     uploadModal.classList.add('active');
@@ -44,11 +59,39 @@ dropZone.ondrop = (e) => {
     e.preventDefault();
     dropZone.classList.remove('drag-over');
     const files = e.dataTransfer.files;
-    uploadFiles(files);
+    
+    // Filter only PDF files
+    const pdfFiles = Array.from(files).filter(file => 
+        file.name.toLowerCase().endsWith('.pdf')
+    );
+    
+    if (pdfFiles.length === 0) {
+        alert('Please upload only PDF files');
+        return;
+    }
+    
+    if (pdfFiles.length < files.length) {
+        alert(`${files.length - pdfFiles.length} non-PDF file(s) were excluded`);
+    }
+    
+    uploadFiles(pdfFiles);
 };
 
 fileInput.onchange = (e) => {
-    uploadFiles(e.target.files);
+    const files = Array.from(e.target.files);
+    
+    // Validate all files are PDFs
+    const nonPdfFiles = files.filter(file => 
+        !file.name.toLowerCase().endsWith('.pdf')
+    );
+    
+    if (nonPdfFiles.length > 0) {
+        alert('Only PDF files are allowed');
+        fileInput.value = '';
+        return;
+    }
+    
+    uploadFiles(files);
 };
 
 // Upload Files
@@ -78,6 +121,13 @@ async function uploadFiles(files) {
         progressFill.style.width = '60%';
 
         const result = await response.json();
+        
+        // Check for errors
+        const errors = result.results.filter(r => r.status === 'error');
+        if (errors.length > 0) {
+            const errorMsg = errors.map(e => `${e.filename}: ${e.message}`).join('\n');
+            alert('Some files failed to upload:\n' + errorMsg);
+        }
 
         uploadStatus.textContent = 'Processing complete!';
         progressFill.style.width = '100%';
@@ -284,7 +334,7 @@ newChatBtn.onclick = () => {
                 await fetch('/clear-all', { method: 'DELETE' });
                 chatHistory = [];
                 selectedSources.clear();
-                chatMessages.innerHTML = '<div class="welcome-message"><h2>Welcome to NotebookLM Clone</h2><p>Upload documents to get started</p></div>';
+                chatMessages.innerHTML = '<div class="welcome-message"><h2>Welcome to NotebookLM Clone</h2><p>Upload PDF documents to get started</p></div>';
                 documentList.innerHTML = '<p class="empty-state">No documents uploaded yet</p>';
                 sendBtn.disabled = true;
                 uploadModal.classList.add('active');
