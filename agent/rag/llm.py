@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://host.docker.internal:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:8b")
+DEFAULT_NUM_CTX = int(os.getenv("NUM_CTX", "8192"))
 
 def _ollama_url(path: str) -> str:
     return f"{OLLAMA_HOST}{path}"
@@ -17,9 +18,12 @@ def generate_text(
     prompt: str,
     temperature: float = 0.3,
     max_tokens: int = 512,
-    num_ctx: int = 4096,
+    num_ctx: int = None,
+    think: bool = True,
 ) -> str:
     """Single-shot text generation (non-streaming)."""
+    if num_ctx is None:
+        num_ctx = DEFAULT_NUM_CTX
     try:
         resp = requests.post(
             _ollama_url("/api/generate"),
@@ -27,6 +31,7 @@ def generate_text(
                 "model": OLLAMA_MODEL,
                 "prompt": prompt,
                 "stream": False,
+                "think": think,
                 "options": {
                     "temperature": temperature,
                     "num_predict": max_tokens,
@@ -51,9 +56,11 @@ def generate_text_stream(
     prompt: str,
     temperature: float = 0.3,
     max_tokens: int = 1024,
-    num_ctx: int = 8192,
+    num_ctx: int = None,
 ) -> Iterator[str]:
     """Streaming text generation. Yields tokens one at a time."""
+    if num_ctx is None:
+        num_ctx = DEFAULT_NUM_CTX
     try:
         resp = requests.post(
             _ollama_url("/api/generate"),
@@ -121,11 +128,12 @@ def generate_json(
     prompt: str,
     temperature: float = 0.1,
     max_tokens: int = 512,
-    num_ctx: int = 4096,
+    num_ctx: int = None,
+    think: bool = True,
 ) -> Optional[dict]:
     """Generate and parse JSON from LLM output."""
     text = generate_text(
-        prompt, temperature=temperature, max_tokens=max_tokens, num_ctx=num_ctx
+        prompt, temperature=temperature, max_tokens=max_tokens, num_ctx=num_ctx, think=think
     )
     if not text:
         return None

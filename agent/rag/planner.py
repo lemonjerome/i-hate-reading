@@ -15,31 +15,14 @@ def plan_queries(question: str) -> Dict[str, Any]:
     User Question: {question}
     """.strip()
 
-    plan = generate_json(prompt)
+    plan = generate_json(prompt, think=False)
     if not isinstance(plan, dict):
         return {"queries": [question], "top_k": 10, "rounds": 1, "notes": ""}
     queries = plan.get("queries") or [question]
     return {
         "queries": [q for q in queries if isinstance(q, str) and q.strip()][:4],
         "top_k": min(int(plan.get("top_k", 10)), 15),
-        "rounds": min(int(plan.get("rounds", 1)), 2),
+        "rounds": 1,  # force single round for speed
         "notes": str(plan.get("notes", "")),
     }
-
-
-def followup_queries(question: str, intermediate_summary: str) -> List[str]:
-    prompt = f"""
-    Propose up to 3 follow-up search queries to fill gaps.
-    Return ONLY JSON: {{"queries": ["...", "..."]}}
-
-    Question: {question}
-
-    Summary so far: {intermediate_summary}
-    """.strip()
-
-    obj = generate_json(prompt)
-    qs = []
-    if isinstance(obj, dict):
-        qs = obj.get("queries") or []
-    return [q for q in qs if isinstance(q, str) and q.strip()]
 

@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Tuple, Iterator
 from collections import defaultdict
 
 from .retrieval import retrieve
-from .planner import plan_queries, followup_queries
+from .planner import plan_queries
 from .llm import generate_text, generate_text_stream
 from .rerank import rerank
 
@@ -17,36 +17,6 @@ def _dedupe_hits(hits: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         seen.add(key)
         out.append(h)
     return out
-
-def _summarize_hits(question: str, hits: List[Dict[str, Any]]) -> str:
-    by_source = defaultdict(list)
-    for h in hits:
-        by_source[str(h.get("source", "unknown"))].append(h)
-
-    blocks = []
-    for source, hs in by_source.items():
-        hs = sorted(
-            hs,
-            key=lambda x: (x.get("rerank_score", x.get("score", 0)) or 0),
-            reverse=True,
-        )[:4]
-        excerpts = "\n".join(
-            f"- [{source}#{h.get('chunk_index')}] {h.get('text', '')[:400]}"
-            for h in hs
-        )
-        blocks.append(f"SOURCE: {source}\n{excerpts}")
-
-    prompt = f"""
-    Summarize the retrieved information to support answering the user's question.
-    Write a compact bullet summary (max 200 words). Mention gaps.
-
-    Question: {question}
-
-    Excerpts:
-    {chr(10).join(blocks)}
-    """.strip()
-
-    return generate_text(prompt, temperature=0.2, num_ctx=4096)
 
 
 def _summarize_chat_history(chat_history: List[dict]) -> str:
@@ -68,7 +38,7 @@ def _summarize_chat_history(chat_history: List[dict]) -> str:
     {history_text}
     """.strip()
 
-    summary = generate_text(summary_prompt, temperature=0.1, max_tokens=150, num_ctx=2048)
+    summary = generate_text(summary_prompt, temperature=0.1, max_tokens=150, think=False)
     return summary.strip()
 
 
@@ -106,70 +76,50 @@ def answer_question_stream(
     chat_history = chat_history or []
     selected_sources = selected_sources or []
 
-    # Summarize chat context
+    # Summarize chat context (with thinking disabled for speed)
     chat_summary = ""
     if chat_history:
+        yield {"type": "status", "message": "Summarizing conversation..."}
         chat_summary = _summarize_chat_history(chat_history)
 
-    # Planning
+    # Planning (thinking disabled — simple JSON task)
+    yield {"type": "status", "message": "Planning queries..."}
     plan = plan_queries(question)
     queries = plan["queries"]
     top_k = plan["top_k"]
-    rounds = plan["rounds"]
 
+    # Retrieval
+    yield {"type": "status", "message": f"Searching documents ({len(queries)} queries)..."}
     all_hits: List[Dict[str, Any]] = []
-    intermediate_summary = ""
+    for q in queries:
+        res = retrieve(q, top_k=top_k, filter_sources=selected_sources)
+        if isinstance(res, dict) and res.get("error"):
+            yield {"type": "error", "error": res["error"], "plan": plan}
+            return
+        all_hits.extend(res)
 
-    # Iterative retrieval
-    for r in range(max(1, rounds)):
-        round_hits: List[Dict[str, Any]] = []
-        for q in queries:
-            res = retrieve(q, top_k=top_k, filter_sources=selected_sources)
-            if isinstance(res, dict) and res.get("error"):
-                yield {"type": "error", "error": res["error"], "plan": plan}
-                return
-            round_hits.extend(res)
+    all_hits = _dedupe_hits(all_hits)
 
-        round_hits = _dedupe_hits(round_hits)
-
-        if enable_rerank:
-            round_hits = rerank(question, round_hits, top_n=max_context_chunks * 2)
-        else:
-            round_hits.sort(
-                key=lambda x: (x.get("score") or 0), reverse=True
-            )
-            round_hits = round_hits[: max_context_chunks * 2]
-
-        all_hits = _dedupe_hits(all_hits + round_hits)
-
-        intermediate_summary = _summarize_hits(
-            question, all_hits[: max_context_chunks * 2]
-        )
-
-        if r < rounds - 1:
-            next_qs = followup_queries(question, intermediate_summary)
-            if next_qs:
-                queries = next_qs
-
-    # Final rerank / sort
-    final_hits = all_hits
+    # Rerank
     if enable_rerank:
-        final_hits = rerank(question, final_hits, top_n=max_context_chunks)
+        yield {"type": "status", "message": "Reranking results..."}
+        all_hits = rerank(question, all_hits, top_n=max_context_chunks)
     else:
-        final_hits.sort(key=lambda x: (x.get("score") or 0), reverse=True)
-        final_hits = final_hits[:max_context_chunks]
+        all_hits.sort(key=lambda x: (x.get("score") or 0), reverse=True)
+        all_hits = all_hits[:max_context_chunks]
 
-    stitched_context = _stitch_context(final_hits, max_chunks=max_context_chunks)
+    stitched_context = _stitch_context(all_hits, max_chunks=max_context_chunks)
 
     yield {
         "type": "metadata",
         "plan": plan,
-        "intermediate_summary": intermediate_summary,
-        "hits": final_hits,
+        "hits": all_hits,
         "context": stitched_context,
     }
 
-    # Build final prompt
+    # Build final prompt (no intermediate summary — feed context directly)
+    yield {"type": "status", "message": "Generating answer..."}
+
     chat_context_section = ""
     if chat_summary:
         chat_context_section = f"""
@@ -184,15 +134,13 @@ If context is insufficient, state what is missing.
 {chat_context_section}
 Question: {question}
 
-Summary: {intermediate_summary}
-
 Context:
 {stitched_context}
 
 Answer:
 """.strip()
 
-    for token in generate_text_stream(final_prompt, temperature=0.2, num_ctx=8192):
+    for token in generate_text_stream(final_prompt, temperature=0.2):
         yield {"type": "token", "content": token}
 
     yield {"type": "done"}

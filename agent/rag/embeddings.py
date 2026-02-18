@@ -36,6 +36,12 @@ logger.info(f"Embedding device: {DEVICE}")
 
 _model = SentenceTransformer(EMBEDDING_MODEL, device=DEVICE)
 
+
+def preload():
+    """Ensure embedding model is loaded (already loaded at import time)."""
+    logger.info(f"Embedding model ready: {EMBEDDING_MODEL} on {DEVICE}")
+
+
 def embed_text(text: str | List[str]) -> List[List[float]]:
     """Embed a string or list of strings. Returns list of vectors."""
     if isinstance(text, str):

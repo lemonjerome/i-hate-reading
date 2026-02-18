@@ -252,16 +252,14 @@ async function sendMessage() {
     chatInput.value = '';
     chatInput.style.height = 'auto';
 
-    // Add thinking indicator
-    const thinkingDiv = document.createElement('div');
-    thinkingDiv.className = 'thinking';
-    thinkingDiv.innerHTML = `
-        <span>Working</span>
-        <span class="thinking-dots">
-            <span></span><span></span><span></span>
-        </span>
+    // Add status indicator
+    const statusDiv = document.createElement('div');
+    statusDiv.className = 'status-indicator';
+    statusDiv.innerHTML = `
+        <span class="status-dot"></span>
+        <span class="status-text">Starting...</span>
     `;
-    chatMessages.appendChild(thinkingDiv);
+    chatMessages.appendChild(statusDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
 
     try {
@@ -275,7 +273,7 @@ async function sendMessage() {
             })
         });
 
-        thinkingDiv.remove();
+        statusDiv.remove();
 
         const answerDiv = document.createElement('div');
         answerDiv.className = 'message message-assistant';
@@ -285,6 +283,7 @@ async function sendMessage() {
         const decoder = new TextDecoder();
         let buffer = '';
         let fullAnswer = '';
+        let firstToken = true;
 
         while (true) {
             const { value, done } = await reader.read();
@@ -298,7 +297,21 @@ async function sendMessage() {
                 if (!line.trim()) continue;
                 const data = JSON.parse(line);
 
+                if (data.type === 'status') {
+                    // Update status indicator text (re-add if removed)
+                    if (!statusDiv.parentNode) {
+                        chatMessages.insertBefore(statusDiv, answerDiv);
+                    }
+                    statusDiv.querySelector('.status-text').textContent = data.message;
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }
+
                 if (data.type === 'token') {
+                    // Remove status on first token
+                    if (firstToken) {
+                        statusDiv.remove();
+                        firstToken = false;
+                    }
                     fullAnswer += data.content;
                     try {
                         answerDiv.innerHTML = formatCitations(marked.parse(fullAnswer));
@@ -315,7 +328,7 @@ async function sendMessage() {
         chatHistory.push({ role: 'assistant', content: fullAnswer });
 
     } catch (error) {
-        thinkingDiv.remove();
+        statusDiv.remove();
         addMessage('Error: ' + error.message, 'assistant');
     }
 
@@ -366,7 +379,7 @@ newChatBtn.onclick = () => {
                 await fetch('/clear-all', { method: 'DELETE' });
                 chatHistory = [];
                 selectedSources.clear();
-                chatMessages.innerHTML = '<div class="welcome-message"><h2>Welcome to NotebookLM Clone</h2><p>Upload PDF documents to get started</p></div>';
+                chatMessages.innerHTML = '<div class="welcome-message"><h2>Welcome to I Hate Reading</h2><p>A Local NotebookLM Clone by lemonjerome.</p></div>';
                 documentList.innerHTML = '<p class="empty-state">No documents uploaded yet</p>';
                 sendBtn.disabled = true;
                 uploadModal.classList.add('active');

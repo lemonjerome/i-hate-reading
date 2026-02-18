@@ -11,11 +11,29 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import StreamingResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from contextlib import asynccontextmanager
+
 from rag.ingestion import ingest_document
 from rag.retrieval import retrieve
 from rag.pipeline import answer_question_stream
+from rag import embeddings as emb_module
+from rag import rerank as rerank_module
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app):
+    # Startup: preload heavy ML models so first query is fast
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info("Preloading ML models...")
+    emb_module.preload()
+    rerank_module.preload()
+    logger.info("All models ready")
+    yield
+    # Shutdown: nothing to clean up
+
+
+app = FastAPI(lifespan=lifespan)
 
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://ollama:11434")
 QDRANT_HOST = os.getenv("QDRANT_HOST", "http://qdrant:6333")

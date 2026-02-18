@@ -42,8 +42,16 @@ _reranker = None
 def _get_reranker():
     global _reranker
     if _reranker is None:
+        logger.info(f"Loading reranker model: {RERANK_MODEL} on {DEVICE}")
         _reranker = CrossEncoder(RERANK_MODEL, device=DEVICE)
+        logger.info("Reranker model loaded")
     return _reranker
+
+
+def preload():
+    """Eagerly load the reranker model (call at app startup)."""
+    if ENABLE_RERANK:
+        _get_reranker()
 
 
 def rerank(

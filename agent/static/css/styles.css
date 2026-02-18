@@ -287,6 +287,42 @@ body {
     40% { transform: scale(1); opacity: 1; }
 }
 
+/* Status indicator (pulsing) */
+.status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 13px;
+    font-style: italic;
+    padding: 0.4rem 0.9rem;
+    border-radius: 20px;
+    background: #f3f3f3;
+    margin-top: 0.25rem;
+    animation: pulse-opacity 1.8s ease-in-out infinite;
+}
+
+.status-indicator .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #4CAF50;
+    animation: pulse-dot 1.8s ease-in-out infinite;
+}
+
+.status-indicator .status-text {
+    color: #666;
+}
+
+@keyframes pulse-opacity {
+    0%, 100% { opacity: 0.55; }
+    50% { opacity: 1; }
+}
+
+@keyframes pulse-dot {
+    0%, 100% { transform: scale(0.8); opacity: 0.5; }
+    50% { transform: scale(1.2); opacity: 1; }
+}
+
 /* Chat Input */
 .chat-input-container {
     padding: 1rem 2rem;
