@@ -9,7 +9,7 @@ from typing import List
 from pypdf import PdfReader
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.responses import StreamingResponse, HTMLResponse
+from fastapi.responses import StreamingResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from contextlib import asynccontextmanager
@@ -42,6 +42,9 @@ QDRANT_HOST = os.getenv("QDRANT_HOST", "http://qdrant:6333")
 OLLAMA_URL = f"{OLLAMA_HOST}/api/generate"
 client = QdrantClient(url=QDRANT_HOST)
 
+# In-memory store for uploaded PDF bytes (session-only)
+pdf_store: dict[str, bytes] = {}
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 class AskRequest(BaseModel):
@@ -73,6 +76,9 @@ async def upload_document(files: List[UploadFile] = File(...)):
             # Read PDF content
             content = await file.read()
             
+            # Store raw PDF bytes for viewer
+            pdf_store[file.filename] = content
+
             # Extract text from PDF
             pdf_reader = PdfReader(io.BytesIO(content))
             text_content = ""
@@ -144,6 +150,7 @@ def delete_document(doc_name: str):
                 ]
             ),
         )
+        pdf_store.pop(doc_name, None)
         return {"status": "deleted", "document": doc_name}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -156,6 +163,7 @@ def clear_all():
             collection_name="notebook_docs",
             vectors_config={"size": 768, "distance": "Cosine"}
         )
+        pdf_store.clear()
         return {"status": "all data cleared"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -169,9 +177,52 @@ def cleanup():
             collection_name="notebook_docs",
             vectors_config={"size": 768, "distance": "Cosine"}
         )
+        pdf_store.clear()
         return {"status": "cleaned up"}
     except Exception:
         return {"status": "error"}
+
+
+@app.get("/view")
+def view_pdf():
+    """Serve the PDF viewer page."""
+    with open("static/viewer.html", "r") as f:
+        return HTMLResponse(f.read())
+
+
+@app.get("/pdf/{doc_name:path}")
+def get_pdf(doc_name: str):
+    """Serve a stored PDF by filename."""
+    if doc_name not in pdf_store:
+        raise HTTPException(status_code=404, detail="PDF not found")
+    return Response(
+        content=pdf_store[doc_name],
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{doc_name}"'},
+    )
+
+
+@app.get("/chunk-text/{doc_name:path}/{chunk_index}")
+def get_chunk_text(doc_name: str, chunk_index: int):
+    """Return the text of a specific chunk for PDF highlighting."""
+    try:
+        result = client.scroll(
+            collection_name="notebook_docs",
+            scroll_filter=Filter(
+                must=[
+                    FieldCondition(key="source", match=MatchValue(value=doc_name)),
+                    FieldCondition(key="chunk_index", match=MatchValue(value=chunk_index)),
+                ]
+            ),
+            limit=1,
+            with_payload=True,
+            with_vectors=False,
+        )
+        if result[0]:
+            return {"text": result[0][0].payload.get("text", "")}
+        return {"text": ""}
+    except Exception:
+        return {"text": ""}
     
 @app.post("/ask")
 def ask(req: AskRequest):

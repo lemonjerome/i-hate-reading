@@ -5,6 +5,7 @@ let selectedSources = new Set();
 // DOM Elements
 const uploadModal = document.getElementById('uploadModal');
 const confirmModal = document.getElementById('confirmModal');
+const tutorialModal = document.getElementById('tutorialModal');
 const uploadBtn = document.getElementById('uploadBtn');
 const closeModal = document.querySelector('.close');
 const dropZone = document.getElementById('dropZone');
@@ -18,6 +19,7 @@ const chatMessages = document.getElementById('chatMessages');
 const documentList = document.getElementById('documentList');
 const clearChatBtn = document.getElementById('clearChatBtn');
 const newChatBtn = document.getElementById('newChatBtn');
+const tutorialStartBtn = document.getElementById('tutorialStart');
 
 // Cleanup on window close/unload
 window.addEventListener('beforeunload', (e) => {
@@ -31,11 +33,17 @@ window.addEventListener('pagehide', () => {
     navigator.sendBeacon('/cleanup');
 });
 
-// Show upload modal on load
+// Show tutorial modal on load
 window.addEventListener('load', () => {
-    uploadModal.classList.add('active');
+    tutorialModal.classList.add('active');
     loadDocuments();
 });
+
+// Tutorial → Get Started opens upload modal
+tutorialStartBtn.onclick = () => {
+    tutorialModal.classList.remove('active');
+    uploadModal.classList.add('active');
+};
 
 // Upload Modal Handlers
 uploadBtn.onclick = () => uploadModal.classList.add('active');
@@ -229,11 +237,14 @@ chatInput.addEventListener('keydown', (e) => {
 
 sendBtn.onclick = sendMessage;
 
-// Format citations like [filename.pdf#3] or [source#2] into styled badges
+// Format citations like [filename.pdf#3] or [source#2] into clickable badges
 function formatCitations(html) {
     return html.replace(
-        /\[([^\]<>]+?#\d+)\]/g,
-        '<span class="citation-badge">$1</span>'
+        /\[([^\]<>]+?)#(\d+)\]/g,
+        (match, filename, chunk) => {
+            const encodedFile = encodeURIComponent(filename.trim());
+            return `<a href="/view?file=${encodedFile}&chunk=${chunk}" target="_blank" class="citation-badge">${filename.trim()}#${chunk}</a>`;
+        }
     );
 }
 

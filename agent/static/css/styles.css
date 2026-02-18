@@ -236,7 +236,14 @@ body {
     white-space: nowrap;
     font-family: 'Courier New', monospace;
     vertical-align: middle;
-    cursor: default;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.citation-badge:hover {
+    background: #c8e6c9;
+    border-color: #66bb6a;
 }
 
 .message-assistant {
@@ -474,4 +481,74 @@ body {
     text-align: center;
     color: #666;
     font-size: 14px;
+}
+
+/* Tutorial Modal */
+.tutorial-modal {
+    max-width: 520px;
+    text-align: center;
+}
+
+.tutorial-modal h2 {
+    margin-bottom: 0.15rem;
+    font-size: 1.5rem;
+}
+
+.tutorial-subtitle {
+    color: #888;
+    font-size: 13px;
+    margin-bottom: 1.2rem;
+}
+
+.tutorial-features {
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    margin-bottom: 1.2rem;
+}
+
+.tutorial-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+}
+
+.tutorial-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+    width: 28px;
+    text-align: center;
+    line-height: 1.4;
+}
+
+.tutorial-item strong {
+    display: block;
+    font-size: 13.5px;
+    margin-bottom: 1px;
+}
+
+.tutorial-item p {
+    font-size: 12.5px;
+    color: #666;
+    margin: 0;
+    line-height: 1.45;
+}
+
+.tutorial-notice {
+    background: #fff8e1;
+    border: 1px solid #ffe082;
+    border-radius: 8px;
+    padding: 0.6rem 0.8rem;
+    font-size: 12px;
+    color: #6d4c00;
+    text-align: left;
+    line-height: 1.5;
+    margin-bottom: 1.2rem;
+}
+
+.tutorial-start-btn {
+    width: 100%;
+    padding: 0.65rem 1rem;
+    font-size: 15px;
 }

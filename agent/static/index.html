@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>I Hate Reading</title>
-    <link rel="stylesheet" href="/static/css/styles.css?v=3">
+    <link rel="stylesheet" href="/static/css/styles.css?v=4">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
@@ -39,6 +39,52 @@
                 <button id="confirmYes" class="btn btn-danger">Yes</button>
                 <button id="confirmNo" class="btn btn-secondary">No</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Tutorial Modal -->
+    <div id="tutorialModal" class="modal">
+        <div class="modal-content tutorial-modal">
+            <h2>Welcome to I Hate Reading</h2>
+            <p class="tutorial-subtitle">A Local NotebookLM Clone by lemonjerome</p>
+
+            <div class="tutorial-features">
+                <div class="tutorial-item">
+                    <span class="tutorial-icon">📁</span>
+                    <div>
+                        <strong>Upload Documents</strong>
+                        <p>Upload PDF files to build your knowledge base. Ask questions and get cited answers.</p>
+                    </div>
+                </div>
+                <div class="tutorial-item">
+                    <span class="tutorial-icon">☑️</span>
+                    <div>
+                        <strong>Select &amp; Manage Documents</strong>
+                        <p>Check or uncheck documents to focus your search. Click <b>&times;</b> to remove any document.</p>
+                    </div>
+                </div>
+                <div class="tutorial-item">
+                    <span class="tutorial-icon">🔗</span>
+                    <div>
+                        <strong>Click Citations</strong>
+                        <p>Click the green citation badges in answers to view the exact source section highlighted in the PDF.</p>
+                    </div>
+                </div>
+                <div class="tutorial-item">
+                    <span class="tutorial-icon">🗑️</span>
+                    <div>
+                        <strong>Clear Chat &amp; New Chat</strong>
+                        <p><b>Clear Chat</b> resets the conversation. <b>New Chat</b> also removes all documents.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tutorial-notice">
+                ⚠️&ensp;<strong>Session-Only Storage</strong> — All documents and chat history exist only in your current
+                browser tab. Nothing is stored persistently. Closing or refreshing the tab will clear everything.
+            </div>
+
+            <button id="tutorialStart" class="btn btn-primary tutorial-start-btn">Get Started</button>
         </div>
     </div>
 
@@ -92,6 +138,6 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=3"></script>
+    <script src="/static/js/app.js?v=4"></script>
 </body>
 </html>

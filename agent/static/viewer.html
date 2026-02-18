@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Viewer — I Hate Reading</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #525659;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+        .toolbar {
+            background: #333;
+            color: white;
+            padding: 0.6rem 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .toolbar .title {
+            font-size: 14px;
+            font-weight: 600;
+            opacity: 0.95;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .toolbar .chunk-info {
+            font-size: 12px;
+            background: rgba(255,255,0,0.25);
+            color: #ffe082;
+            padding: 3px 10px;
+            border-radius: 12px;
+            white-space: nowrap;
+        }
+        #pdf-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 1rem;
+            gap: 0.75rem;
+        }
+        .page-wrapper {
+            position: relative;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            background: white;
+        }
+        .page-wrapper canvas {
+            display: block;
+        }
+        .highlight-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+        .loading {
+            color: white;
+            text-align: center;
+            padding: 3rem;
+            font-size: 16px;
+        }
+        .scroll-anchor {
+            scroll-margin-top: 80px;
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <span class="title" id="docTitle">Loading...</span>
+        <span class="chunk-info" id="chunkInfo"></span>
+    </div>
+    <div id="loading" class="loading">Loading PDF...</div>
+    <div id="pdf-container"></div>
+
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        const params = new URLSearchParams(window.location.search);
+        const fileName = params.get('file');
+        const chunkIndex = parseInt(params.get('chunk'), 10);
+
+        document.getElementById('docTitle').textContent = fileName || 'PDF Viewer';
+        document.getElementById('chunkInfo').textContent = `Chunk #${chunkIndex}`;
+        document.title = `${fileName} #${chunkIndex} — I Hate Reading`;
+
+        async function init() {
+            // 1. Fetch chunk text for highlighting
+            let chunkText = '';
+            try {
+                const resp = await fetch(
+                    `/chunk-text/${encodeURIComponent(fileName)}/${chunkIndex}`
+                );
+                const data = await resp.json();
+                chunkText = data.text || '';
+            } catch (e) {
+                console.warn('Could not fetch chunk text:', e);
+            }
+
+            // 2. Load PDF
+            const loadingTask = pdfjsLib.getDocument(`/pdf/${encodeURIComponent(fileName)}`);
+            const pdf = await loadingTask.promise;
+            document.getElementById('loading').style.display = 'none';
+
+            const container = document.getElementById('pdf-container');
+            const scale = 1.5;
+
+            // 3. First pass — find the target page by matching chunk text
+            let targetPageNum = 1;
+            if (chunkText) {
+                // Clean and take first portion for matching
+                const searchStr = chunkText.replace(/\s+/g, ' ').trim()
+                    .substring(0, 120).toLowerCase();
+
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const tc = await page.getTextContent();
+                    const pageText = tc.items.map(item => item.str).join(' ').toLowerCase();
+                    // Try progressively shorter matches
+                    if (pageText.includes(searchStr.substring(0, 80)) ||
+                        pageText.includes(searchStr.substring(0, 50))) {
+                        targetPageNum = i;
+                        break;
+                    }
+                }
+            }
+
+            // 4. Render all pages
+            let scrollTarget = null;
+
+            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                const page = await pdf.getPage(pageNum);
+                const viewport = page.getViewport({ scale });
+
+                const wrapper = document.createElement('div');
+                wrapper.className = 'page-wrapper';
+                wrapper.style.width = viewport.width + 'px';
+                wrapper.style.height = viewport.height + 'px';
+
+                // Canvas
+                const canvas = document.createElement('canvas');
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                const ctx = canvas.getContext('2d');
+                await page.render({ canvasContext: ctx, viewport }).promise;
+                wrapper.appendChild(canvas);
+
+                // 5. Highlight on target page
+                if (pageNum === targetPageNum && chunkText) {
+                    wrapper.classList.add('scroll-anchor');
+                    scrollTarget = wrapper;
+
+                    const textContent = await page.getTextContent();
+                    const items = textContent.items;
+
+                    // Build running text and track item positions
+                    let running = '';
+                    const itemMeta = [];
+                    for (const item of items) {
+                        const start = running.length;
+                        running += item.str;
+                        itemMeta.push({ start, end: running.length, item });
+                        running += ' ';
+                    }
+
+                    // Find where chunk text appears in page text
+                    const runningLower = running.toLowerCase();
+                    const chunkLower = chunkText.replace(/\s+/g, ' ')
+                        .trim().toLowerCase();
+
+                    let matchStart = -1;
+                    // Try progressively shorter search strings
+                    for (const len of [100, 60, 35]) {
+                        const s = chunkLower.substring(0, len);
+                        matchStart = runningLower.indexOf(s);
+                        if (matchStart >= 0) break;
+                    }
+
+                    if (matchStart >= 0) {
+                        const matchEnd = Math.min(
+                            matchStart + chunkLower.length,
+                            running.length
+                        );
+
+                        // Draw highlight rectangles
+                        const hlCanvas = document.createElement('canvas');
+                        hlCanvas.className = 'highlight-layer';
+                        hlCanvas.width = viewport.width;
+                        hlCanvas.height = viewport.height;
+                        hlCanvas.style.width = viewport.width + 'px';
+                        hlCanvas.style.height = viewport.height + 'px';
+                        const hCtx = hlCanvas.getContext('2d');
+                        hCtx.fillStyle = 'rgba(255, 255, 0, 0.35)';
+
+                        for (const im of itemMeta) {
+                            if (im.end <= matchStart || im.start >= matchEnd) continue;
+                            if (!im.item.str.trim()) continue;
+
+                            const tx = pdfjsLib.Util.transform(
+                                viewport.transform, im.item.transform
+                            );
+                            const fontSize = Math.sqrt(tx[0] * tx[0] + tx[1] * tx[1]);
+                            const x = tx[4];
+                            const y = tx[5] - fontSize;
+                            const width = im.item.width * viewport.scale;
+
+                            hCtx.fillRect(x, y, width, fontSize * 1.3);
+                        }
+
+                        wrapper.appendChild(hlCanvas);
+                    }
+                }
+
+                container.appendChild(wrapper);
+            }
+
+            // 6. Scroll to highlighted section
+            if (scrollTarget) {
+                setTimeout(() => {
+                    scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 150);
+            }
+        }
+
+        init().catch(err => {
+            document.getElementById('loading').textContent =
+                'Error loading PDF: ' + err.message;
+            console.error(err);
+        });
+    </script>
+</body>
+</html>
