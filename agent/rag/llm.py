@@ -55,10 +55,9 @@ def generate_text(
 def generate_text_stream(
     prompt: str,
     temperature: float = 0.3,
-    max_tokens: int = 1024,
     num_ctx: int = None,
 ) -> Iterator[str]:
-    """Streaming text generation. Yields tokens one at a time."""
+    """Streaming text generation. Yields tokens one at a time. No token limit."""
     if num_ctx is None:
         num_ctx = DEFAULT_NUM_CTX
     try:
@@ -70,7 +69,6 @@ def generate_text_stream(
                 "stream": True,
                 "options": {
                     "temperature": temperature,
-                    "num_predict": max_tokens,
                     "num_ctx": num_ctx,
                 },
             },

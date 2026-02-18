@@ -20,18 +20,15 @@ const clearChatBtn = document.getElementById('clearChatBtn');
 const newChatBtn = document.getElementById('newChatBtn');
 
 // Cleanup on window close/unload
-window.addEventListener('beforeunload', async (e) => {
+window.addEventListener('beforeunload', (e) => {
     e.preventDefault();
     e.returnValue = 'Are you sure you want to leave? All chat history and documents will be deleted.';
-    
-    // Clear all data
-    try {
-        await fetch('/clear-all', { method: 'DELETE', keepalive: true });
-    } catch (error) {
-        console.error('Error clearing data on exit:', error);
-    }
-    
     return e.returnValue;
+});
+
+// Actually clear data when user confirms leaving
+window.addEventListener('pagehide', () => {
+    navigator.sendBeacon('/cleanup');
 });
 
 // Show upload modal on load
@@ -172,15 +169,35 @@ async function loadDocuments() {
                 const label = document.createElement('label');
                 label.htmlFor = `doc-${doc}`;
                 label.textContent = doc;
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'doc-delete-btn';
+                deleteBtn.innerHTML = '&times;';
+                deleteBtn.title = 'Remove document';
+                deleteBtn.onclick = async (e) => {
+                    e.stopPropagation();
+                    if (!confirm(`Remove "${doc}"?`)) return;
+                    try {
+                        await fetch(`/documents/${encodeURIComponent(doc)}`, { method: 'DELETE' });
+                        selectedSources.delete(doc);
+                        await loadDocuments();
+                    } catch (err) {
+                        alert('Error removing document: ' + err.message);
+                    }
+                };
                 
                 item.appendChild(checkbox);
                 item.appendChild(label);
+                item.appendChild(deleteBtn);
                 documentList.appendChild(item);
                 
                 if (checkbox.checked) selectedSources.add(doc);
             });
             
             sendBtn.disabled = false;
+        } else {
+            documentList.innerHTML = '<p class="empty-state">No documents uploaded yet</p>';
+            sendBtn.disabled = true;
         }
     } catch (error) {
         console.error('Error loading documents:', error);
@@ -212,10 +229,10 @@ chatInput.addEventListener('keydown', (e) => {
 
 sendBtn.onclick = sendMessage;
 
-// Format citations like [filename.pdf#3] into styled badges
+// Format citations like [filename.pdf#3] or [source#2] into styled badges
 function formatCitations(html) {
     return html.replace(
-        /\[([^\]]+?\.pdf#\d+)\]/g,
+        /\[([^\]<>]+?#\d+)\]/g,
         '<span class="citation-badge">$1</span>'
     );
 }

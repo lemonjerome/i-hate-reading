@@ -129,7 +129,9 @@ Previous Conversation Summary:
 
     final_prompt = f"""
 Answer the user using ONLY the context below. Format in clean Markdown.
-Use citations like [source#chunk] for key claims.
+Cite sources by copying the exact tags from the context (e.g. [filename.pdf#2]).
+Don't put citations inside latex. This will break latex processing. Only clean math should be inside latex delimiters.
+Every key claim must have at least one citation. Do NOT write [source#chunk] literally.
 If context is insufficient, state what is missing.
 {chat_context_section}
 Question: {question}

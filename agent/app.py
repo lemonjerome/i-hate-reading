@@ -4,6 +4,7 @@ import io
 
 from pydantic import BaseModel
 from qdrant_client import QdrantClient
+from qdrant_client.models import Filter, FieldCondition, MatchValue
 from typing import List
 from pypdf import PdfReader
 
@@ -128,6 +129,25 @@ def list_documents():
 def clear_chat():
     return {"status": "chat cleared"}
 
+@app.delete("/documents/{doc_name:path}")
+def delete_document(doc_name: str):
+    """Delete all chunks belonging to a specific document."""
+    try:
+        client.delete(
+            collection_name="notebook_docs",
+            points_selector=Filter(
+                must=[
+                    FieldCondition(
+                        key="source",
+                        match=MatchValue(value=doc_name),
+                    )
+                ]
+            ),
+        )
+        return {"status": "deleted", "document": doc_name}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.delete("/clear-all")
 def clear_all():
     try:
@@ -139,6 +159,19 @@ def clear_all():
         return {"status": "all data cleared"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+@app.post("/cleanup")
+def cleanup():
+    """Called via sendBeacon on page unload — clears all session data."""
+    try:
+        client.delete_collection(collection_name="notebook_docs")
+        client.create_collection(
+            collection_name="notebook_docs",
+            vectors_config={"size": 768, "distance": "Cosine"}
+        )
+        return {"status": "cleaned up"}
+    except Exception:
+        return {"status": "error"}
     
 @app.post("/ask")
 def ask(req: AskRequest):
