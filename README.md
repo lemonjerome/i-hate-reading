@@ -74,7 +74,19 @@ brew install ollama
 
 Or download from [ollama.com/download](https://ollama.com/download).
 
-### Step 2: Pull the LLM Model
+### Step 2: Start Ollama
+
+In a **separate terminal** (keep it running):
+
+```bash
+ollama serve
+```
+
+You should see it listening on `http://127.0.0.1:11434`.
+
+### Step 3: Pull the LLM Model
+
+In another terminal, pull the model while Ollama is serving:
 
 ```bash
 ollama pull qwen3:8b
@@ -86,22 +98,12 @@ This downloads ~5 GB. Verify it's there:
 ollama list
 ```
 
-### Step 3: Clone the Repository
+### Step 4: Clone the Repository
 
 ```bash
 git clone https://github.com/your-username/i-hate-reading.git
 cd i-hate-reading
 ```
-
-### Step 4: Start Ollama
-
-In a **separate terminal** (keep it running):
-
-```bash
-ollama serve
-```
-
-You should see it listening on `http://127.0.0.1:11434`.
 
 ### Step 5: Start the App
 
