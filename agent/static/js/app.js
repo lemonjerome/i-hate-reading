@@ -212,6 +212,32 @@ chatInput.addEventListener('keydown', (e) => {
 
 sendBtn.onclick = sendMessage;
 
+// Format citations like [filename.pdf#3] into styled badges
+function formatCitations(html) {
+    return html.replace(
+        /\[([^\]]+?\.pdf#\d+)\]/g,
+        '<span class="citation-badge">$1</span>'
+    );
+}
+
+// Render LaTeX in an element using KaTeX auto-render
+function renderLatex(element) {
+    if (!window.katexReady || typeof renderMathInElement === 'undefined') return;
+    try {
+        renderMathInElement(element, {
+            delimiters: [
+                { left: '$$', right: '$$', display: true },
+                { left: '$',  right: '$',  display: false },
+                { left: '\\(', right: '\\)', display: false },
+                { left: '\\[', right: '\\]', display: true },
+            ],
+            throwOnError: false,
+        });
+    } catch (e) {
+        // Silently ignore KaTeX errors
+    }
+}
+
 // Send Message
 async function sendMessage() {
     const question = chatInput.value.trim();
@@ -275,7 +301,8 @@ async function sendMessage() {
                 if (data.type === 'token') {
                     fullAnswer += data.content;
                     try {
-                        answerDiv.innerHTML = marked.parse(fullAnswer);
+                        answerDiv.innerHTML = formatCitations(marked.parse(fullAnswer));
+                        renderLatex(answerDiv);
                     } catch {
                         answerDiv.textContent = fullAnswer;
                     }
