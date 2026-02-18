@@ -1,9 +1,11 @@
 import os
 import json
+import io
 
 from pydantic import BaseModel
 from qdrant_client import QdrantClient
 from typing import List
+from pypdf import PdfReader
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import StreamingResponse, HTMLResponse
@@ -49,9 +51,25 @@ async def upload_document(files: List[UploadFile] = File(...)):
                 })
                 continue
 
+            # Read PDF content
             content = await file.read()
-            text_content = content.decode('utf-8')
+            
+            # Extract text from PDF
+            pdf_reader = PdfReader(io.BytesIO(content))
+            text_content = ""
+            
+            for page in pdf_reader.pages:
+                text_content += page.extract_text() + "\n\n"
+            
+            if not text_content.strip():
+                results.append({
+                    "filename": file.filename,
+                    "status": "error",
+                    "message": "No text could be extracted from PDF"
+                })
+                continue
 
+            # Ingest document
             result = ingest_document(text_content, file.filename)
             results.append({
                 "filename": file.filename,
