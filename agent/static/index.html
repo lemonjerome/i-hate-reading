@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NotebookLM Clone</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    <!-- Upload Modal -->
+    <div id="uploadModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Upload Documents</h2>
+            <div id="dropZone" class="drop-zone">
+                <p>Drag & drop files here or click to browse</p>
+                <input type="file" id="fileInput" multiple accept=".txt,.md,.pdf">
+            </div>
+            <div id="uploadProgress" class="upload-progress hidden">
+                <div class="progress-bar">
+                    <div id="progressFill" class="progress-fill"></div>
+                </div>
+                <p id="uploadStatus">Uploading documents...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmModal" class="modal">
+        <div class="modal-content confirm-modal">
+            <h3 id="confirmTitle">Confirm Action</h3>
+            <p id="confirmMessage">Are you sure?</p>
+            <div class="modal-buttons">
+                <button id="confirmYes" class="btn btn-danger">Yes</button>
+                <button id="confirmNo" class="btn btn-secondary">No</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div class="container">
+        <!-- Header Bar -->
+        <div class="header-bar">
+            <button id="uploadBtn" class="btn btn-primary">
+                <span>📁</span> Upload Documents
+            </button>
+            <div class="header-actions">
+                <button id="clearChatBtn" class="btn btn-secondary">
+                    <span>🗑️</span> Clear Chat
+                </button>
+                <button id="newChatBtn" class="btn btn-secondary">
+                    <span>➕</span> New Chat
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Document List -->
+            <div class="document-panel">
+                <h3>Documents</h3>
+                <div id="documentList" class="document-list">
+                    <p class="empty-state">No documents uploaded yet</p>
+                </div>
+            </div>
+
+            <!-- Chat Panel -->
+            <div class="chat-panel">
+                <div id="chatMessages" class="chat-messages">
+                    <div class="welcome-message">
+                        <h2>Welcome to NotebookLM Clone</h2>
+                        <p>Upload documents to get started</p>
+                    </div>
+                </div>
+                <div class="chat-input-container">
+                    <textarea 
+                        id="chatInput" 
+                        placeholder="Ask a question about your documents..."
+                        rows="3"
+                    ></textarea>
+                    <button id="sendBtn" class="btn btn-primary" disabled>
+                        <span>➤</span> Send
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
