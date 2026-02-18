@@ -54,11 +54,11 @@
         .page-wrapper canvas {
             display: block;
         }
-        .highlight-layer {
+        .highlight-overlay {
             position: absolute;
-            top: 0;
-            left: 0;
+            background: rgba(255, 255, 0, 0.4);
             pointer-events: none;
+            border-radius: 2px;
         }
         .loading {
             color: white;
@@ -91,6 +91,15 @@
         document.getElementById('chunkInfo').textContent = `Chunk #${chunkIndex}`;
         document.title = `${fileName} #${chunkIndex} — I Hate Reading`;
 
+        // Normalise: lowercase + collapse whitespace
+        function norm(s) {
+            return s.replace(/\s+/g, ' ').trim().toLowerCase();
+        }
+        // Aggressive: strip ALL non-alphanumeric
+        function stripped(s) {
+            return s.replace(/[^a-z0-9]/gi, '').toLowerCase();
+        }
+
         async function init() {
             // 1. Fetch chunk text for highlighting
             let chunkText = '';
@@ -104,6 +113,9 @@
                 console.warn('Could not fetch chunk text:', e);
             }
 
+            console.log('[viewer] chunk text length:', chunkText.length,
+                'preview:', chunkText.substring(0, 80));
+
             // 2. Load PDF
             const loadingTask = pdfjsLib.getDocument(`/pdf/${encodeURIComponent(fileName)}`);
             const pdf = await loadingTask.promise;
@@ -112,39 +124,97 @@
             const container = document.getElementById('pdf-container');
             const scale = 1.5;
 
-            // 3. First pass — find the target page by matching chunk text
-            let targetPageNum = 1;
-            if (chunkText) {
-                // Clean and take first portion for matching
-                const searchStr = chunkText.replace(/\s+/g, ' ').trim()
-                    .substring(0, 120).toLowerCase();
-
-                for (let i = 1; i <= pdf.numPages; i++) {
-                    const page = await pdf.getPage(i);
-                    const tc = await page.getTextContent();
-                    const pageText = tc.items.map(item => item.str).join(' ').toLowerCase();
-                    // Try progressively shorter matches
-                    if (pageText.includes(searchStr.substring(0, 80)) ||
-                        pageText.includes(searchStr.substring(0, 50))) {
-                        targetPageNum = i;
-                        break;
-                    }
-                }
+            // 3. Pre-extract text items from all pages
+            const pageData = [];
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const viewport = page.getViewport({ scale });
+                const tc = await page.getTextContent();
+                pageData.push({ pageNum: i, page, viewport, items: tc.items });
             }
 
-            // 4. Render all pages
+            // 4. Find target page by matching chunk text into page text
+            let targetPageNum = -1;
+            let matchedItemIndices = [];
+
+            if (chunkText) {
+                const chunkNorm = norm(chunkText);
+
+                for (const pd of pageData) {
+                    // Build normalised page text from items joined by spaces
+                    const pageNorm = norm(pd.items.map(it => it.str).join(' '));
+
+                    // Try progressively shorter snippet match
+                    let found = false;
+                    for (const len of [200, 120, 80, 50, 30]) {
+                        const snippet = chunkNorm.substring(0, Math.min(len, chunkNorm.length));
+                        if (!snippet || snippet.length < 10) continue;
+                        const idx = pageNorm.indexOf(snippet);
+                        if (idx >= 0) {
+                            targetPageNum = pd.pageNum;
+                            found = true;
+
+                            // Map match range back to item indices
+                            const mStart = idx;
+                            const mEnd = Math.min(idx + chunkNorm.length, pageNorm.length);
+
+                            // Build offset map: track each item's start/end in pageNorm
+                            let offset = 0;
+                            for (let i = 0; i < pd.items.length; i++) {
+                                const s = norm(pd.items[i].str);
+                                if (!s) continue;
+                                const pos = pageNorm.indexOf(s, offset);
+                                if (pos < 0) continue;
+                                const iStart = pos;
+                                const iEnd = pos + s.length;
+                                offset = iEnd;
+                                // Check overlap with match range
+                                if (iEnd > mStart && iStart < mEnd) {
+                                    matchedItemIndices.push(i);
+                                }
+                            }
+                            break;
+                        }
+                    }
+                    if (found) break;
+
+                    // Fallback: stripped matching
+                    if (!found) {
+                        const pageStrip = stripped(pd.items.map(it => it.str).join(' '));
+                        const chunkStrip = stripped(chunkText);
+                        const snippetStrip = chunkStrip.substring(0, Math.min(80, chunkStrip.length));
+                        if (snippetStrip.length >= 20 && pageStrip.includes(snippetStrip)) {
+                            targetPageNum = pd.pageNum;
+                            // Highlight all non-empty items on this page as fallback
+                            matchedItemIndices = pd.items
+                                .map((it, i) => it.str.trim() ? i : -1)
+                                .filter(i => i >= 0);
+                            // Try to narrow to relevant section
+                            // We'll just take the middle third as best guess
+                            const total = matchedItemIndices.length;
+                            if (total > 30) {
+                                const third = Math.floor(total / 3);
+                                matchedItemIndices = matchedItemIndices.slice(third, third * 2);
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                console.log(`[viewer] target page: ${targetPageNum}, matched items: ${matchedItemIndices.length}`);
+            }
+
+            // 5. Render all pages
             let scrollTarget = null;
 
-            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-                const page = await pdf.getPage(pageNum);
-                const viewport = page.getViewport({ scale });
+            for (const pd of pageData) {
+                const { page, viewport, items, pageNum } = pd;
 
                 const wrapper = document.createElement('div');
                 wrapper.className = 'page-wrapper';
                 wrapper.style.width = viewport.width + 'px';
                 wrapper.style.height = viewport.height + 'px';
 
-                // Canvas
                 const canvas = document.createElement('canvas');
                 canvas.width = viewport.width;
                 canvas.height = viewport.height;
@@ -152,69 +222,41 @@
                 await page.render({ canvasContext: ctx, viewport }).promise;
                 wrapper.appendChild(canvas);
 
-                // 5. Highlight on target page
-                if (pageNum === targetPageNum && chunkText) {
+                // Highlight on target page using positioned div overlays
+                if (pageNum === targetPageNum && matchedItemIndices.length > 0) {
                     wrapper.classList.add('scroll-anchor');
                     scrollTarget = wrapper;
 
-                    const textContent = await page.getTextContent();
-                    const items = textContent.items;
+                    for (const idx of matchedItemIndices) {
+                        const item = items[idx];
+                        if (!item.str.trim()) continue;
 
-                    // Build running text and track item positions
-                    let running = '';
-                    const itemMeta = [];
-                    for (const item of items) {
-                        const start = running.length;
-                        running += item.str;
-                        itemMeta.push({ start, end: running.length, item });
-                        running += ' ';
-                    }
-
-                    // Find where chunk text appears in page text
-                    const runningLower = running.toLowerCase();
-                    const chunkLower = chunkText.replace(/\s+/g, ' ')
-                        .trim().toLowerCase();
-
-                    let matchStart = -1;
-                    // Try progressively shorter search strings
-                    for (const len of [100, 60, 35]) {
-                        const s = chunkLower.substring(0, len);
-                        matchStart = runningLower.indexOf(s);
-                        if (matchStart >= 0) break;
-                    }
-
-                    if (matchStart >= 0) {
-                        const matchEnd = Math.min(
-                            matchStart + chunkLower.length,
-                            running.length
+                        // Transform item position to viewport coordinates
+                        const tx = pdfjsLib.Util.transform(
+                            viewport.transform,
+                            item.transform
                         );
+                        const fontSize = Math.sqrt(tx[0] * tx[0] + tx[1] * tx[1]);
+                        const x = tx[4];
+                        const y = tx[5];
 
-                        // Draw highlight rectangles
-                        const hlCanvas = document.createElement('canvas');
-                        hlCanvas.className = 'highlight-layer';
-                        hlCanvas.width = viewport.width;
-                        hlCanvas.height = viewport.height;
-                        hlCanvas.style.width = viewport.width + 'px';
-                        hlCanvas.style.height = viewport.height + 'px';
-                        const hCtx = hlCanvas.getContext('2d');
-                        hCtx.fillStyle = 'rgba(255, 255, 0, 0.35)';
-
-                        for (const im of itemMeta) {
-                            if (im.end <= matchStart || im.start >= matchEnd) continue;
-                            if (!im.item.str.trim()) continue;
-
-                            const tx = pdfjsLib.Util.transform(
-                                viewport.transform, im.item.transform
-                            );
-                            const fontSize = Math.sqrt(tx[0] * tx[0] + tx[1] * tx[1]);
-                            const x = tx[4];
-                            const y = tx[5] - fontSize;
-                            const width = im.item.width * viewport.scale;
-
-                            hCtx.fillRect(x, y, width, fontSize * 1.3);
+                        // Width: use item.width scaled, or estimate from chars
+                        let w;
+                        if (item.width != null && item.width > 0) {
+                            w = item.width * viewport.scale;
+                        } else {
+                            w = item.str.length * fontSize * 0.52;
                         }
 
-                        wrapper.appendChild(hlCanvas);
+                        const h = fontSize * 1.25;
+
+                        const hl = document.createElement('div');
+                        hl.className = 'highlight-overlay';
+                        hl.style.left = x + 'px';
+                        hl.style.top = (y - fontSize) + 'px';
+                        hl.style.width = w + 'px';
+                        hl.style.height = h + 'px';
+                        wrapper.appendChild(hl);
                     }
                 }
 
@@ -225,7 +267,7 @@
             if (scrollTarget) {
                 setTimeout(() => {
                     scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 150);
+                }, 200);
             }
         }
 

@@ -20,6 +20,7 @@ const documentList = document.getElementById('documentList');
 const clearChatBtn = document.getElementById('clearChatBtn');
 const newChatBtn = document.getElementById('newChatBtn');
 const tutorialStartBtn = document.getElementById('tutorialStart');
+const helpBtn = document.getElementById('helpBtn');
 
 // Cleanup on window close/unload
 window.addEventListener('beforeunload', (e) => {
@@ -44,6 +45,9 @@ tutorialStartBtn.onclick = () => {
     tutorialModal.classList.remove('active');
     uploadModal.classList.add('active');
 };
+
+// Help button → reopen tutorial
+helpBtn.onclick = () => tutorialModal.classList.add('active');
 
 // Upload Modal Handlers
 uploadBtn.onclick = () => uploadModal.classList.add('active');
@@ -266,8 +270,8 @@ function renderLatex(element) {
     }
 }
 
-// Send Message
-async function sendMessage() {
+// Send Message (retryUserDiv: if provided, skip creating a new user bubble — used for retry)
+async function sendMessage(retryUserDiv) {
     const question = chatInput.value.trim();
     if (!question || isProcessing) return;
 
@@ -275,8 +279,8 @@ async function sendMessage() {
     sendBtn.disabled = true;
     chatInput.disabled = true;
 
-    // Add user message
-    addMessage(question, 'user');
+    // Add user message (skip if retrying)
+    const userMsgDiv = retryUserDiv || addMessage(question, 'user');
     chatInput.value = '';
     chatInput.style.height = 'auto';
 
@@ -355,6 +359,11 @@ async function sendMessage() {
         chatHistory.push({ role: 'user', content: question });
         chatHistory.push({ role: 'assistant', content: fullAnswer });
 
+        // Add action bar (retry + delete) under the answer
+        const actionBar = createActionBar(question, userMsgDiv, answerDiv);
+        chatMessages.appendChild(actionBar);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+
     } catch (error) {
         statusDiv.remove();
         addMessage('Error: ' + error.message, 'assistant');
@@ -383,6 +392,7 @@ function addMessage(content, role) {
 
     chatMessages.appendChild(messageDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
+    return messageDiv;
 }
 
 // Clear Chat
@@ -432,4 +442,46 @@ function showConfirmModal(title, message, onConfirm) {
     document.getElementById('confirmNo').onclick = () => {
         confirmModal.classList.remove('active');
     };
+}
+
+// Create action bar with retry and delete buttons for a chat exchange
+function createActionBar(originalQuestion, userMsgDiv, answerDiv) {
+    const bar = document.createElement('div');
+    bar.className = 'message-actions';
+
+    // Retry button
+    const retryBtn = document.createElement('button');
+    retryBtn.className = 'action-btn';
+    retryBtn.title = 'Retry this question';
+    retryBtn.innerHTML = '&#x21bb;'; // ↻
+    retryBtn.onclick = () => {
+        if (isProcessing) return;
+        // Remove the answer and action bar, keep user bubble
+        const uIdx = chatHistory.findLastIndex(h => h.role === 'user' && h.content === originalQuestion);
+        if (uIdx >= 0) chatHistory.splice(uIdx, 2);
+        answerDiv.remove();
+        bar.remove();
+        // Re-send the same question, reusing existing user bubble
+        chatInput.value = originalQuestion;
+        sendMessage(userMsgDiv);
+    };
+
+    // Delete button
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'action-btn action-btn-delete';
+    deleteBtn.title = 'Delete this exchange';
+    deleteBtn.innerHTML = '&#x1F5D1;'; // 🗑
+    deleteBtn.onclick = () => {
+        // Remove from chatHistory
+        const uIdx = chatHistory.findLastIndex(h => h.role === 'user' && h.content === originalQuestion);
+        if (uIdx >= 0) chatHistory.splice(uIdx, 2);
+        // Remove DOM elements
+        if (userMsgDiv) userMsgDiv.remove();
+        answerDiv.remove();
+        bar.remove();
+    };
+
+    bar.appendChild(retryBtn);
+    bar.appendChild(deleteBtn);
+    return bar;
 }
