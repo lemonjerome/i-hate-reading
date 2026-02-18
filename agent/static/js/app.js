@@ -229,7 +229,12 @@ async function sendMessage() {
     // Add thinking indicator
     const thinkingDiv = document.createElement('div');
     thinkingDiv.className = 'thinking';
-    thinkingDiv.textContent = 'Thinking...';
+    thinkingDiv.innerHTML = `
+        <span>Working</span>
+        <span class="thinking-dots">
+            <span></span><span></span><span></span>
+        </span>
+    `;
     chatMessages.appendChild(thinkingDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
 
