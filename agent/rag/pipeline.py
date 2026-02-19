@@ -6,6 +6,7 @@ from .retrieval import retrieve
 from .planner import plan_queries
 from .llm import generate_text, generate_text_stream
 from .rerank import rerank
+from .vector_store import client, COLLECTION
 
 def _dedupe_hits(hits: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     seen: set[Tuple[str, str]] = set()
@@ -71,27 +72,67 @@ def answer_question_stream(
     selected_sources: List[str] = None,
 ) -> Iterator[Dict[str, Any]]:
     enable_rerank = os.getenv("ENABLE_RERANK", "1") not in ("0", "false", "False")
-    max_context_chunks = int(os.getenv("MAX_CONTEXT_CHUNKS", "8"))
+    # MAX_CONTEXT_CHUNKS env var acts as a hard cap; tier-based value is used otherwise
+    hard_cap = int(os.getenv("MAX_CONTEXT_CHUNKS", "24"))
 
     chat_history = chat_history or []
     selected_sources = selected_sources or []
 
+    # --- Count chunks/sources in the active collection ---
+    try:
+        count_result = client.count(collection_name=COLLECTION, exact=True)
+        total_chunks = count_result.count
+    except Exception:
+        total_chunks = 0
+
+    # Count distinct sources (or cap at a scroll)
+    try:
+        scroll_result = client.scroll(
+            collection_name=COLLECTION,
+            limit=10000,
+            with_payload=["source"],
+            with_vectors=False,
+        )
+        active_sources = set()
+        for pt in scroll_result[0]:
+            if pt.payload and "source" in pt.payload:
+                # Only count sources the user has selected (or all if no filter)
+                src = pt.payload["source"]
+                if not selected_sources or src in selected_sources:
+                    active_sources.add(src)
+        source_count = len(active_sources)
+    except Exception:
+        source_count = len(selected_sources) if selected_sources else 1
+
+    yield {
+        "type": "status",
+        "message": f"Indexed {total_chunks} chunks across {source_count} document(s) — planning search...",
+    }
+
     # Summarize chat context (with thinking disabled for speed)
     chat_summary = ""
     if chat_history:
-        yield {"type": "status", "message": "Summarizing conversation..."}
+        yield {"type": "status", "message": "Summarizing conversation history..."}
         chat_summary = _summarize_chat_history(chat_history)
 
-    # Planning (thinking disabled — simple JSON task)
-    yield {"type": "status", "message": "Planning queries..."}
-    plan = plan_queries(question)
+    # Planning — scaled to collection size
+    plan = plan_queries(question, chunk_count=total_chunks, source_count=source_count)
     queries = plan["queries"]
     top_k = plan["top_k"]
+    tier_note = plan.get("tier", "")
+    # Final context window: tier recommendation capped by hard override
+    max_context_chunks = min(plan["max_context_chunks"], hard_cap)
 
-    # Retrieval
-    yield {"type": "status", "message": f"Searching documents ({len(queries)} queries)..."}
+    yield {
+        "type": "status",
+        "message": f"Running {len(queries)} search quer{'y' if len(queries) == 1 else 'ies'} (top {top_k} per query, up to {max_context_chunks} final chunks)...",
+    }
+
+    # Retrieval — emit per-query progress
     all_hits: List[Dict[str, Any]] = []
-    for q in queries:
+    for i, q in enumerate(queries, 1):
+        short_q = q if len(q) <= 60 else q[:57] + "..."
+        yield {"type": "status", "message": f"Query {i}/{len(queries)}: \"{short_q}\""}
         res = retrieve(q, top_k=top_k, filter_sources=selected_sources)
         if isinstance(res, dict) and res.get("error"):
             yield {"type": "error", "error": res["error"], "plan": plan}
@@ -99,16 +140,29 @@ def answer_question_stream(
         all_hits.extend(res)
 
     all_hits = _dedupe_hits(all_hits)
+    unique_sources = len({h.get("source") for h in all_hits})
+
+    yield {
+        "type": "status",
+        "message": f"Retrieved {len(all_hits)} candidate chunks from {unique_sources} source(s)...",
+    }
 
     # Rerank
     if enable_rerank:
-        yield {"type": "status", "message": "Reranking results..."}
+        yield {
+            "type": "status",
+            "message": f"Reranking {len(all_hits)} chunks → selecting top {max_context_chunks}...",
+        }
         all_hits = rerank(question, all_hits, top_n=max_context_chunks)
     else:
         all_hits.sort(key=lambda x: (x.get("score") or 0), reverse=True)
         all_hits = all_hits[:max_context_chunks]
 
     stitched_context = _stitch_context(all_hits, max_chunks=max_context_chunks)
+
+    # Surface which sources made it into the final context
+    final_sources = sorted({h.get("source", "?") for h in all_hits})
+    sources_label = ", ".join(final_sources) if final_sources else "unknown"
 
     yield {
         "type": "metadata",
@@ -117,8 +171,10 @@ def answer_question_stream(
         "context": stitched_context,
     }
 
-    # Build final prompt (no intermediate summary — feed context directly)
-    yield {"type": "status", "message": "Generating answer..."}
+    yield {
+        "type": "status",
+        "message": f"Generating answer from {len(all_hits)} chunks ({sources_label})...",
+    }
 
     chat_context_section = ""
     if chat_summary:

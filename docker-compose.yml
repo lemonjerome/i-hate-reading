@@ -35,10 +35,11 @@ services:
       - QDRANT_HOST=http://qdrant:6333
       - RERANK_MODEL=BAAI/bge-reranker-base
       - ENABLE_RERANK=1
-      - MAX_CONTEXT_CHUNKS=8
+      - MAX_CONTEXT_CHUNKS=40
       - HF_HOME=/cache/huggingface
       - HF_HUB_OFFLINE=1
       - TRANSFORMERS_OFFLINE=1
+      - NUM_CTX=24576
     volumes:
       - ~/.cache/huggingface:/cache/huggingface
     extra_hosts:
