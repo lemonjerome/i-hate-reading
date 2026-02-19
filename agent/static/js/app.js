@@ -239,7 +239,7 @@ chatInput.addEventListener('keydown', (e) => {
     }
 });
 
-sendBtn.onclick = sendMessage;
+sendBtn.onclick = () => sendMessage();
 
 // Format citations like [filename.pdf#3] or [source#2] into clickable badges
 function formatCitations(html) {
