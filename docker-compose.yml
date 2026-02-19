@@ -36,6 +36,9 @@ services:
       - RERANK_MODEL=BAAI/bge-reranker-base
       - ENABLE_RERANK=1
       - MAX_CONTEXT_CHUNKS=8
+      - HF_HOME=/cache/huggingface
+    volumes:
+      - ~/.cache/huggingface:/cache/huggingface
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

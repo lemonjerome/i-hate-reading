@@ -270,6 +270,49 @@ function renderLatex(element) {
     }
 }
 
+// Safely parse markdown while preserving LaTeX from being mangled by marked.js.
+// Strategy: extract all math regions into a map, replace with placeholders,
+// run marked.parse, then restore the original math text before KaTeX runs.
+function safeMarkdownParse(text) {
+    const math = {};
+    let idx = 0;
+    const placeholder = (i) => `\x02MATH${i}\x03`;
+
+    // Extract $$...$$ display blocks first (greedier, must come before $...$)
+    let safe = text.replace(/\$\$([\s\S]+?)\$\$/g, (_, content) => {
+        const key = placeholder(idx++);
+        math[key] = `$$${content}$$`;
+        return key;
+    });
+
+    // Extract $...$ inline (not crossing newlines, non-empty)
+    safe = safe.replace(/\$([^\$\n]+?)\$/g, (_, content) => {
+        const key = placeholder(idx++);
+        math[key] = `$${content}$`;
+        return key;
+    });
+
+    // Extract \[...\] and \(...\)
+    safe = safe.replace(/\\\[([\s\S]+?)\\\]/g, (_, content) => {
+        const key = placeholder(idx++);
+        math[key] = `\\[${content}\\]`;
+        return key;
+    });
+    safe = safe.replace(/\\\((.+?)\\\)/g, (_, content) => {
+        const key = placeholder(idx++);
+        math[key] = `\\(${content}\\)`;
+        return key;
+    });
+
+    // Parse markdown (math is safely hidden behind placeholders)
+    let html = marked.parse(safe);
+
+    // Restore math expressions (HTML-decode the placeholder wrappers if needed)
+    html = html.replace(/\x02MATH(\d+)\x03/g, (_, i) => math[placeholder(Number(i))] || '');
+
+    return html;
+}
+
 // Send Message (retryUserDiv: if provided, skip creating a new user bubble — used for retry)
 async function sendMessage(retryUserDiv) {
     const question = chatInput.value.trim();
@@ -346,7 +389,7 @@ async function sendMessage(retryUserDiv) {
                     }
                     fullAnswer += data.content;
                     try {
-                        answerDiv.innerHTML = formatCitations(marked.parse(fullAnswer));
+                        answerDiv.innerHTML = formatCitations(safeMarkdownParse(fullAnswer));
                         renderLatex(answerDiv);
                     } catch {
                         answerDiv.textContent = fullAnswer;
@@ -384,7 +427,8 @@ function addMessage(content, role) {
     } else {
         messageDiv.className = 'message message-assistant';
         try {
-            messageDiv.innerHTML = marked.parse(content);
+            messageDiv.innerHTML = safeMarkdownParse(content);
+            renderLatex(messageDiv);
         } catch {
             messageDiv.textContent = content;
         }
