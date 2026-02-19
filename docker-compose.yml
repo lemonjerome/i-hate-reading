@@ -37,6 +37,8 @@ services:
       - ENABLE_RERANK=1
       - MAX_CONTEXT_CHUNKS=8
       - HF_HOME=/cache/huggingface
+      - HF_HUB_OFFLINE=1
+      - TRANSFORMERS_OFFLINE=1
     volumes:
       - ~/.cache/huggingface:/cache/huggingface
     extra_hosts:
