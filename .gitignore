@@ -2,5 +2,6 @@
 __pycahe__/
 *.__pycahe__
 data/
-./DS_Store
+.DS_Store
 venv/
+Uncodixfy.md

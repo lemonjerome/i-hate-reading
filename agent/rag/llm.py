@@ -8,7 +8,7 @@ from typing import Iterator, Optional
 logger = logging.getLogger(__name__)
 
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://host.docker.internal:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:8b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:4b")
 DEFAULT_NUM_CTX = int(os.getenv("NUM_CTX", "8192"))
 
 def _ollama_url(path: str) -> str:

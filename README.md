@@ -61,7 +61,7 @@ Documents and chat history exist only for the current browser session. Closing t
 
 | Component | Technology |
 |-----------|------------|
-| LLM | Qwen3:8B via Ollama (local) |
+| LLM | gemma3:4b via Ollama (local) |
 | Embeddings | BAAI/bge-base-en-v1.5 |
 | Reranker | BAAI/bge-reranker-base |
 | Vector DB | Qdrant |
@@ -98,7 +98,7 @@ You should see it listening on `http://127.0.0.1:11434`.
 In another terminal, pull the model while Ollama is serving:
 
 ```bash
-ollama pull qwen3:8b
+ollama pull gemma3:4b
 ```
 
 This downloads ~5 GB. Verify it's there:
@@ -150,7 +150,7 @@ Configured in `docker-compose.yml` under `notebook-agent`:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `OLLAMA_HOST` | `http://host.docker.internal:11434` | Ollama API URL |
-| `OLLAMA_MODEL` | `qwen3:8b` | LLM model name |
+| `OLLAMA_MODEL` | `gemma3:4b` | LLM model name |
 | `QDRANT_HOST` | `http://qdrant:6333` | Qdrant URL |
 | `NUM_CTX` | `8192` | Context window size for all LLM calls |
 | `RERANK_MODEL` | `BAAI/bge-reranker-base` | Cross-encoder model |

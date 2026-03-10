@@ -31,7 +31,7 @@ services:
       - "8000:8000"
     environment:
       - OLLAMA_HOST=http://host.docker.internal:11434
-      - OLLAMA_MODEL=qwen3:8b
+      - OLLAMA_MODEL=gemma3:4b
       - QDRANT_HOST=http://qdrant:6333
       - RERANK_MODEL=BAAI/bge-reranker-base
       - ENABLE_RERANK=1
