@@ -2,7 +2,7 @@
 
 A local NotebookLM clone that lets you upload PDF documents, ask questions about them, and get cited answers — all running entirely on your machine. No cloud APIs, no subscriptions.
 
-![Built with](https://img.shields.io/badge/LLM-Qwen3%3A8B-blue) ![Vector DB](https://img.shields.io/badge/VectorDB-Qdrant-red) ![Framework](https://img.shields.io/badge/Framework-FastAPI-green)
+![Built with](https://img.shields.io/badge/LLM-Gemma3%3A4B-blue) ![Vector DB](https://img.shields.io/badge/VectorDB-Qdrant-red) ![Framework](https://img.shields.io/badge/Framework-FastAPI-green)
 
 ---
 
